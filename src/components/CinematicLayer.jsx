@@ -1,3 +1,5 @@
+import React from 'react';
+
 const dots = Array.from({ length: 84 }, (_, index) => {
   const left = (index * 37) % 92;
   const top = (index * 61) % 90;

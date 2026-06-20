@@ -1,3 +1,4 @@
+import React from 'react';
 import VideoIntro from './components/VideoIntro.jsx';
 import ProofVault from './components/ProofVault.jsx';
 import About from './components/About.jsx';
@@ -19,5 +20,9 @@ export default function App() {
       <ProofStrip />
       <Contact />
     </main>
+    // <div>
+    //   portfolio working
+
+    // </div>
   );
 }

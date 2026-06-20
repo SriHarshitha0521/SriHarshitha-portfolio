@@ -1,5 +1,7 @@
+import React from 'react';
 import { useRef } from 'react';
 import Reveal from './Reveal.jsx';
+
 
 function MagneticButton({ href, children, className, ...rest }) {
   const ref = useRef(null);
