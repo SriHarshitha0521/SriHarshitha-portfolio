@@ -2,6 +2,7 @@ import React from 'react';
 import VideoIntro from './components/VideoIntro.jsx';
 import ProofVault from './components/ProofVault.jsx';
 import About from './components/About.jsx';
+import WhyHireMe from './components/WhyHireMe.jsx';
 import Projects from './components/Projects.jsx';
 import Skills from './components/Skills.jsx';
 import ProofStrip from './components/ProofStrip.jsx';
@@ -15,6 +16,7 @@ export default function App() {
       <VideoIntro />
       <ProofVault />
       <About />
+      <WhyHireMe />
       <Projects />
       <Skills />
       <ProofStrip />

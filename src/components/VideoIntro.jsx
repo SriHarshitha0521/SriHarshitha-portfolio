@@ -7,56 +7,13 @@ export default function VideoIntro() {
   const videoRef   = useRef(null);
   const bgVideoRef = useRef(null);
 
-  const [muted,          setMuted]          = useState(false);
-  const [paused,         setPaused]         = useState(false);
-  // showUnlock: true until the browser lets us play with sound
-  const [showUnlock,     setShowUnlock]     = useState(false);
+  // Voice (main video) plays with sound for this many loops on load, then auto-mutes.
+  const AUTO_PLAY_LOOPS = 5;
 
-  const firstPlayFinishedRef = useRef(false);
-  const unlockedRef          = useRef(false);
-
-  // ── Try to play the main video with audio ──
-  const playWithVoice = () => {
-    const main = videoRef.current;
-    if (!main) return;
-    main.muted         = false;
-    main.defaultMuted  = false;
-    main.volume        = 1;
-    setMuted(false);
-    setPaused(false);
-    return main.play();
-  };
-
-  // ── Called once on any user interaction to unlock audio ──
-  const unlockAudio = () => {
-    if (unlockedRef.current) return;
-    unlockedRef.current = true;
-    setShowUnlock(false);
-
-    const main = videoRef.current;
-    const bg   = bgVideoRef.current;
-    if (!main) return;
-
-    // If the video is already playing muted (browser started it muted),
-    // unmute it in place so the viewer hears from wherever they are.
-    if (!main.paused) {
-      main.muted        = false;
-      main.defaultMuted = false;
-      main.volume       = 1;
-      setMuted(false);
-      return;
-    }
-
-    // Otherwise restart from the beginning with voice.
-    firstPlayFinishedRef.current = false;
-    main.loop        = false;
-    main.currentTime = 0;
-    main.muted       = false;
-    main.defaultMuted = false;
-    main.volume      = 1;
-    setMuted(false);
-    Promise.allSettled([main.play(), bg?.play()]);
-  };
+  const [muted,  setMuted]  = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [showHints, setShowHints] = useState(true);
+  const playCountRef = useRef(0);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -65,7 +22,7 @@ export default function VideoIntro() {
 
     if (root) requestAnimationFrame(() => root.classList.add('is-loaded'));
 
-    // Background ambient video — always muted
+    // Background video: always silent, continuous loop.
     if (bg) {
       bg.muted        = true;
       bg.defaultMuted = true;
@@ -73,67 +30,75 @@ export default function VideoIntro() {
       bg.play().catch(() => {});
     }
 
-    if (main) {
-      main.muted        = false;
-      main.defaultMuted = false;
-      main.volume       = 1;
-      main.loop         = false;
-      setMuted(false);
-      setPaused(false);
+    if (!main) return;
 
-      const attempt = playWithVoice();
-      if (attempt) {
-        attempt
-          .then(() => {
-            // Autoplay with sound succeeded (rare but happens on desktop)
-            unlockedRef.current = true;
-            setShowUnlock(false);
-          })
-          .catch(() => {
-            // Browser blocked audio autoplay — show the unlock overlay immediately
-            setShowUnlock(true);
-            // Also try muted autoplay so the video at least starts visually
-            main.muted = true;
-            main.play().catch(() => {});
-          });
+    // Main video: try to autoplay WITH sound for AUTO_PLAY_LOOPS plays, then
+    // switch to a silent continuous loop. We can't use the native `loop`
+    // attribute while counting plays, since it never fires `ended`, so we
+    // manually restart the video on each `ended` event until the count is hit.
+    main.loop = false;
+
+    const startMutedLoop = () => {
+      main.loop          = true;
+      main.muted         = true;
+      main.defaultMuted  = true;
+      main.volume        = 0;
+      setMuted(true);
+      main.play().catch(() => {});
+    };
+
+    const handleEnded = () => {
+      playCountRef.current += 1;
+      if (playCountRef.current < AUTO_PLAY_LOOPS) {
+        main.currentTime = 0;
+        main.play().catch(() => {});
+      } else {
+        startMutedLoop();
       }
+    };
 
-      // Register a one-time listener on every meaningful user gesture
-      const onGesture = () => unlockAudio();
-      window.addEventListener('pointerdown', onGesture, { once: true });
-      window.addEventListener('keydown',     onGesture, { once: true });
-      window.addEventListener('touchstart',  onGesture, { once: true });
+    main.addEventListener('ended', handleEnded);
 
-      return () => {
-        window.removeEventListener('pointerdown', onGesture);
-        window.removeEventListener('keydown',     onGesture);
-        window.removeEventListener('touchstart',  onGesture);
-      };
-    }
+    // Attempt unmuted autoplay. Most browsers block autoplay with sound
+    // until the user has interacted with the page, so if this is rejected
+    // we fall back immediately to a muted loop (no popups, no stalled video).
+    main.muted        = false;
+    main.defaultMuted = false;
+    main.volume        = 1;
+    main.play().then(() => {
+      setMuted(false);
+    }).catch(() => {
+      // Autoplay with sound was blocked by the browser — fall back to muted.
+      startMutedLoop();
+    });
+
+    return () => {
+      main.removeEventListener('ended', handleEnded);
+    };
   }, []); // eslint-disable-line
 
-  const handleVideoEnded = () => {
-    const main = videoRef.current;
-    if (!main || firstPlayFinishedRef.current) return;
-    firstPlayFinishedRef.current = true;
-    main.muted        = true;
-    main.defaultMuted = true;
-    main.loop         = true;
-    main.currentTime  = 0;
-    setMuted(true);
-    main.play().catch(() => {});
-  };
+  useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowHints(false);
+  }, 6000);
 
+  return () => clearTimeout(timer);
+}, []);
+
+  // Manual toggle (button/control). Once the user touches this, we stop the
+  // automatic "5 plays then mute" sequence and just loop continuously.
   const toggleMute = async () => {
     const main = videoRef.current;
+    const bg   = bgVideoRef.current;
     if (!main) return;
-    // If user had not unlocked yet, treat this as unlock
-    if (!unlockedRef.current) { unlockAudio(); return; }
-    const nextMuted   = !muted;
+    playCountRef.current = AUTO_PLAY_LOOPS; // cancel the auto-mute countdown
+    main.loop = true;
+    const nextMuted = !muted;
     main.muted        = nextMuted;
     main.defaultMuted = nextMuted;
-    main.volume       = nextMuted ? 0 : 1;
+    main.volume        = nextMuted ? 0 : 1;
     setMuted(nextMuted);
+    if (bg) bg.muted = true; // ambient background video always stays muted
     if (main.paused) { await main.play().catch(() => {}); setPaused(false); }
   };
 
@@ -162,64 +127,6 @@ export default function VideoIntro() {
       />
 
       <div className="global-shade" />
-
-      {/* ── Auto-shown sound unlock overlay ──
-           Appears immediately when browser blocks autoplay with audio.
-           Any tap/click anywhere on this overlay (or anywhere on the page
-           via the window listener) will unlock and dismiss it. ── */}
-      {showUnlock && (
-        <div
-          onClick={unlockAudio}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 100,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.55)',
-            backdropFilter: 'blur(4px)',
-            cursor: 'pointer',
-            gap: '14px',
-          }}
-          aria-label="Tap anywhere to hear voice"
-        >
-          {/* Pulsing speaker icon */}
-          <div style={{
-            width: 72, height: 72, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)',
-            border: '2px solid rgba(255,255,255,0.35)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 30,
-            animation: 'unlockPulse 1.6s ease-in-out infinite',
-          }}>
-            🔊
-          </div>
-          <p style={{
-            color: '#fff', fontFamily: 'inherit',
-            fontSize: '1rem', fontWeight: 600,
-            margin: 0, letterSpacing: '0.03em',
-            textShadow: '0 1px 6px rgba(0,0,0,0.6)',
-          }}>
-            Tap anywhere to hear voice
-          </p>
-          <p style={{
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '0.78rem', margin: 0,
-          }}>
-            Your browser requires a tap to enable audio
-          </p>
-
-          {/* Inline keyframes for the pulse */}
-          <style>{`
-            @keyframes unlockPulse {
-              0%,100% { transform: scale(1);   opacity: 1; }
-              50%      { transform: scale(1.12); opacity: 0.75; }
-            }
-          `}</style>
-        </div>
-      )}
 
       <div className="hero-shell">
         <div className="hero-grid">
@@ -251,11 +158,20 @@ export default function VideoIntro() {
               </div>
 
               <div className="hero-actions">
-                <a href="#work" onClick={(e) => { e.preventDefault(); scrollToWork(); }} className="primary-btn">
+                <a href="#contact" onClick={(e) => { e.preventDefault(); scrollToContact(); }} className="primary-btn">
+                  Hire Me
+                </a>
+                <a href="#work" onClick={(e) => { e.preventDefault(); scrollToWork(); }} className="ghost-btn">
                   View Work
                 </a>
-                <a href="#contact" onClick={(e) => { e.preventDefault(); scrollToContact(); }} className="ghost-btn">
-                  Contact
+              </div>
+
+              <div className="hero-socials">
+                <a href="https://www.linkedin.com/in/kurre-sri-harshitha-3101a1215/" target="_blank" rel="noreferrer" aria-label="LinkedIn">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 0h-14c-2.76 0-5 2.24-5 5v14c0 2.76 2.24 5 5 5h14c2.76 0 5-2.24 5-5v-14c0-2.76-2.24-5-5-5zM8 19h-3v-9h3v9zM6.5 8.25c-.97 0-1.75-.79-1.75-1.75s.78-1.75 1.75-1.75 1.75.79 1.75 1.75-.78 1.75-1.75 1.75zM20 19h-3v-4.5c0-1.07-.02-2.45-1.5-2.45-1.5 0-1.73 1.17-1.73 2.37v4.58h-3v-9h2.88v1.23h.04c.4-.75 1.38-1.55 2.84-1.55 3.04 0 3.6 2 3.6 4.59v4.73z"/></svg>
+                </a>
+                <a href="https://github.com/SriHarshitha0521" target="_blank" rel="noreferrer" aria-label="GitHub">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55 0-.27-.01-1.16-.02-2.11-3.2.7-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.04-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.67 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.83 1.18 3.08 0 4.4-2.69 5.37-5.25 5.66.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .3.21.66.79.55A10.52 10.52 0 0 0 23.5 12c0-6.35-5.15-11.5-11.5-11.5z"/></svg>
                 </a>
               </div>
             </div>
@@ -269,16 +185,20 @@ export default function VideoIntro() {
               autoPlay
               playsInline
               preload="auto"
-              onEnded={handleVideoEnded}
             />
             <div className="video-warmth" />
             <div className="video-edge" />
-          </div>
-        </div>
+            <div className="video-controls-center">
 
-        <div className="controls">
-          <button className="control-btn" onClick={togglePlay}  aria-label="Toggle play">{paused ? '▶' : 'Ⅱ'}</button>
-          <button className="control-btn" onClick={toggleMute}  aria-label="Toggle sound">{muted  ? '🔇' : '🔊'}</button>
+  <button
+    className="video-main-btn"
+    onClick={toggleMute}
+  >
+    {muted ? "🔇 Turn Sound On" : "🔊 Turn Sound Off"}
+  </button>
+
+</div>
+          </div>
         </div>
       </div>
 

@@ -3,6 +3,17 @@ import { useRef } from 'react';
 import Reveal from './Reveal.jsx';
 
 const projects = [
+   {
+    tag: 'Finance · Transaction Platform',
+    title: 'TA Wallet Financial Application',
+    summary:
+      'Wallet dashboards, payment gateway integrations, optimized rendering, and reliable financial microservices for transaction workflows.',
+    challenge: 'Create fast dashboards and reliable APIs for financial operations.',
+    result: 'Improved frontend load speed while maintaining stable production service uptime.',
+    impact: ['35% faster UI', 'Under 1.5s APIs', '10K+ wallet records', '99.9% uptime'],
+    stack: ['React', 'Redux', 'Spring Boot', 'PostgreSQL', 'REST APIs', 'JMeter'],
+    glow: '#42ff91',
+  },
   {
     tag: 'Government Identity · API Integration',
     title: 'DigiLocker / Meri Pehchaan Application',
@@ -25,17 +36,7 @@ const projects = [
     stack: ['React', 'TypeScript', 'Spring Boot', 'PostgreSQL', 'SFTP', 'Postman'],
     glow: '#ff9d3d',
   },
-  {
-    tag: 'Finance · Transaction Platform',
-    title: 'TA Wallet Financial Application',
-    summary:
-      'Wallet dashboards, payment gateway integrations, optimized rendering, and reliable financial microservices for transaction workflows.',
-    challenge: 'Create fast dashboards and reliable APIs for financial operations.',
-    result: 'Improved frontend load speed while maintaining stable production service uptime.',
-    impact: ['35% faster UI', 'Under 1.5s APIs', '10K+ wallet records', '99.9% uptime'],
-    stack: ['React', 'Redux', 'Spring Boot', 'PostgreSQL', 'REST APIs', 'JMeter'],
-    glow: '#42ff91',
-  },
+ 
 ];
 
 function ProjectCard({ project, index }) {
